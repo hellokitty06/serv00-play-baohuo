@@ -13,31 +13,29 @@ colorize() {
     esac
 }
 
-# 从环境变量中读取信息
-SERVERS="${SERVERS:-}"  # 多个服务器信息，格式为 user:pass:host 用逗号分隔
-BOT_TOKEN="${BOT_TOKEN:-}"  # Telegram Bot Token，可选
-CHAT_ID="${CHAT_ID:-}"      # Telegram Chat ID，可选
-WXPUSHER_TOKEN="${WXPUSHER_TOKEN:-}"  # WxPusher Token
-PUSHPLUS_TOKEN="${PUSHPLUS_TOKEN:-}"  # PushPlus Token
-WXPUSHER_USER_ID="${WXPUSHER_USER_ID:-}"  # WxPusher User ID
+# 从远程 URL 获取配置文件内容
+CONFIG_URL="https://api.zjcc.cloudns.be/CSV/main/serv00.json"
+CONFIG_JSON=$(curl -s "$CONFIG_URL")
 
-# 通知服务选择（0: 不启用，1: TG，2: WxPusher，3: PushPlus，4: TG+WxPusher，5: TG+PushPlus）
-NOTIFY_SERVICE="${NOTIFY_SERVICE:-0}"  # 默认为 0（不启用通知）
+# 从 JSON 中提取配置信息
+NOTIFY_SERVICE=$(echo "$CONFIG_JSON" | jq -r '.NOTIFICATION')
+BOT_TOKEN=$(echo "$CONFIG_JSON" | jq -r '.TELEGRAM_CONFIG.BOT_TOKEN')
+CHAT_ID=$(echo "$CONFIG_JSON" | jq -r '.TELEGRAM_CONFIG.CHAT_ID')
+WXPUSHER_TOKEN=$(echo "$CONFIG_JSON" | jq -r '.WXPUSHER_TOKEN')
+PUSHPLUS_TOKEN=$(echo "$CONFIG_JSON" | jq -r '.PUSHPLUS_TOKEN')
+WXPUSHER_USER_ID=$(echo "$CONFIG_JSON" | jq -r '.WXPUSHER_USER_ID')
 
-# 控制每个服务是否运行，默认值为 2（不运行）
-NEZHA_DASHBOARD="${NEZHA_DASHBOARD:-2}"  # 默认不运行
-NEZHA_AGENT="${NEZHA_AGENT:-2}"          # 默认不运行
-SUN_PANEL="${SUN_PANEL:-2}"              # 默认不运行
-WEB_SSH="${WEB_SSH:-2}"                  # 默认不运行
-ALIST="${ALIST:-2}"                      # 默认不运行 Alist
+SERVERS=$(echo "$CONFIG_JSON" | jq -r '.SERVERS | map(.SSH_USER + ":" +.SSH_PASS + ":" +.HOST) | join(",")')
 
-# 默认启动 SINGBOX
-SINGBOX="${SINGBOX:-1}"                  # 默认运行 singbox
+SINGBOX=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.SINGBOX')
+NEZHA_DASHBOARD=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.NEZHA_DASHBOARD')
+NEZHA_AGENT=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.NEZHA_AGENT')
+SUN_PANEL=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.SUN_PANEL')
+WEB_SSH=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.WEB_SSH')
+ALIST=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.ALIST')
+ENABLE_ALL_SERVICES=$(echo "$CONFIG_JSON" | jq -r '.ENABLE_ALL_SERVICES')
 
-# 启用所有服务的标志（默认为 false，不启用所有服务）
-ENABLE_ALL_SERVICES="${ENABLE_ALL_SERVICES:-false}"
-
-# 如果启用所有服务，则设置每个服务为启用状态
+# 启用所有服务时的配置
 if [ "$ENABLE_ALL_SERVICES" == "true" ]; then
     SINGBOX=1
     NEZHA_DASHBOARD=1
@@ -47,6 +45,25 @@ if [ "$ENABLE_ALL_SERVICES" == "true" ]; then
     ALIST=1
     colorize green "已启用所有服务"
 fi
+
+# 显示启用的通知服务和服务
+colorize blue "启用的通知服务："
+case "$NOTIFY_SERVICE" in
+    1) colorize green "Telegram" ;;
+    2) colorize green "WxPusher" ;;
+    3) colorize green "PushPlus" ;;
+    4) colorize green "Telegram 和 WxPusher" ;;
+    5) colorize green "Telegram 和 PushPlus" ;;
+    *) colorize red "没有启用通知" ;;
+esac
+
+colorize blue "启用的服务："
+[[ "$SINGBOX" -eq 1 ]] && colorize green "Singbox"
+[[ "$NEZHA_DASHBOARD" -eq 1 ]] && colorize green "Nezha Dashboard"
+[[ "$NEZHA_AGENT" -eq 1 ]] && colorize green "Nezha Agent"
+[[ "$SUN_PANEL" -eq 1 ]] && colorize green "Sun Panel"
+[[ "$WEB_SSH" -eq 1 ]] && colorize green "Web SSH"
+[[ "$ALIST" -eq 1 ]] && colorize green "Alist"
 
 # 自定义 Telegram 通知函数（当 BOT_TOKEN 和 CHAT_ID 存在时才启用）
 send_tg_notification() {
@@ -90,27 +107,14 @@ send_pushplus_message() {
     fi
 }
 
-# 显示启用的通知服务和服务
-colorize blue "启用的通知服务："
-case "$NOTIFY_SERVICE" in
-    1) colorize green "Telegram" ;;
-    2) colorize green "WxPusher" ;;
-    3) colorize green "PushPlus" ;;
-    4) colorize green "Telegram 和 WxPusher" ;;
-    5) colorize green "Telegram 和 PushPlus" ;;
-    *) colorize red "没有启用通知" ;;
-esac
-
-colorize blue "启用的服务："
-[[ "$SINGBOX" -eq 1 ]] && colorize green "Singbox"
-[[ "$NEZHA_DASHBOARD" -eq 1 ]] && colorize green "Nezha Dashboard"
-[[ "$NEZHA_AGENT" -eq 1 ]] && colorize green "Nezha Agent"
-[[ "$SUN_PANEL" -eq 1 ]] && colorize green "Sun Panel"
-[[ "$WEB_SSH" -eq 1 ]] && colorize green "Web SSH"
-[[ "$ALIST" -eq 1 ]] && colorize green "Alist"
-
 # 将逗号分隔的账户信息解析成一个数组
 IFS=',' read -ra SERVER_LIST <<< "$SERVERS"  # 按逗号分隔服务器列表
+combined_message=""  # 用于汇总所有服务器执行情况的消息内容
+index=1  # 索引
+# 结果摘要标题
+RESULT_SUMMARY="青龙自动进程内容：\n———————————————————————\n NEZHA_DASHBOARD ‖ NEZHA_AGENT ‖ singbox ‖ sun-panel ‖ webssh ‖ alist \n———————————————————————\n"
+# 发送合并后的结果摘要
+combined_message="$RESULT_SUMMARY"
 for SERVER in "${SERVER_LIST[@]}"; do
     # 分解每个服务器的用户名、密码、地址
     IFS=':' read -r SSH_USER SSH_PASS SSH_HOST <<< "$SERVER"
@@ -127,7 +131,7 @@ for SERVER in "${SERVER_LIST[@]}"; do
         local service_path=$2
         if sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "test -d $service_path"; then
             ssh_cmd+="cd $service_path || true; pkill -f '$service_name' || true; nohup ./$service_name > ${service_name}_$(date +%Y%m%d_%H%M%S).log 2>&1 & "
-            services_started+="$service_name, "
+            services_started+="$service_name "  # 服务以空格分隔
         else
             colorize red "目录 $service_path 不存在，跳过 $service_name 服务"
         fi
@@ -144,27 +148,26 @@ for SERVER in "${SERVER_LIST[@]}"; do
     # 执行构建的 SSH 命令
     sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "$ssh_cmd"
 
-    # 如果有启动的服务，发送通知
+    # 拼接服务启动后的状态
     if [ -n "$services_started" ]; then
-        services_started=${services_started%, }  # 去掉最后的逗号
-        colorize green "${SERVER_ID} 执行成功"
-
-        message="✅ ${SERVER_ID} 脚本执行完成：已执行服务：$services_started"
-
-        # 根据选择的通知方式发送消息
-        case "$NOTIFY_SERVICE" in
-            1) send_tg_notification "$message" ;;
-            2) send_wxpusher_message "$SERVER_ID 执行成功" "$message" ;;
-            3) send_pushplus_message "$SERVER_ID 执行成功" "$message" ;;
-            4)
-                send_tg_notification "$message"
-                send_wxpusher_message "$SERVER_ID 执行成功" "$message"
-                ;;
-            5)
-                send_tg_notification "$message"
-                send_pushplus_message "$SERVER_ID 执行成功" "$message"
-                ;;
-            *) colorize yellow "未启用通知服务" ;;
-        esac
+        colorize green "✅ $index. $SSH_USER 【 $SSH_HOST 】登录成功，启动服务：$services_started"
+        combined_message+="✅ $index. $SSH_USER 【 $SSH_HOST 】登录成功\n服务：$services_started\n"
+    else
+        colorize red "❌ $index. $SSH_USER 【 $SSH_HOST 】登录失败"
+        combined_message+="❌ $index. $SSH_USER 【 $SSH_HOST 】 - 登录失败\n"
     fi
+    index=$((index + 1))
 done
+
+# 发送通知消息
+if [ "$NOTIFY_SERVICE" -eq 1 ] || [ "$NOTIFY_SERVICE" -eq 4 ]; then
+    send_tg_notification "$combined_message"
+fi
+if [ "$NOTIFY_SERVICE" -eq 2 ] || [ "$NOTIFY_SERVICE" -eq 4 ]; then
+    send_wxpusher_message "VPS 自动进程内容" "$combined_message"
+fi
+if [ "$NOTIFY_SERVICE" -eq 3 ] || [ "$NOTIFY_SERVICE" -eq 5 ]; then
+    send_pushplus_message "VPS 自动进程内容" "$combined_message"
+fi
+
+colorize green "脚本执行完毕，通知已发送！"
