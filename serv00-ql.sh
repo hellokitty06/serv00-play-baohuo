@@ -14,7 +14,7 @@ colorize() {
 }
 
 # 从远程 URL 获取配置文件内容
-CONFIG_URL="https://api.zjcc.cloudns.be/CSV/main/serv00.json"
+CONFIG_URL="https://XXXXXXX/serv00.json"
 CONFIG_JSON=$(curl -s "$CONFIG_URL")
 
 # 从 JSON 中提取配置信息
