@@ -3,6 +3,23 @@
 ## 2024/12/23/00:45 更新serv00-ql  增加了多个通知方式 
 ## 2024/12/23/21:48 更新serv00-ql和serv00-vps  修复了webssh的bug,增加了alist 增加了服务项总开关`ENABLE_ALL_SERVICES` 修改了通知逻辑，动态通知。
 ## 2024/12/25/09:00 更新serv00-ql和serv00-vps  延长了运行时间 放弃本地环境变量 同步 `serv00-vps.sh` 采用远程变量 `serv00.json` 应要求改成合并通知，就一条消息  。
+
+## 不想远程的改为本地
+### 原来从远程获取的代码
+### CONFIG_URL="xxxxxxx/serv00.json"
+### CONFIG_JSON=$(curl -s "$CONFIG_URL")
+
+### 改为从本地读取配置文件内容（以下是新代码）
+```
+CONFIG_FILE="serv00.json"
+if [ -f "$CONFIG_FILE" ]; then
+    CONFIG_JSON=$(cat "$CONFIG_FILE")
+else
+    echo "配置文件 $CONFIG_FILE 不存在，脚本无法继续执行"
+    exit 1
+fi
+```
+
 感谢[饭奇骏大佬的serv00-play项目](https://github.com/frankiejun).  [serv00-play项目地址](https://github.com/frankiejun/serv00-play).
 
 感谢[vfhky大佬的nz项目](https://github.com/vfhky).    [serv00_ct8_nezha项目地址](https://github.com/vfhky/serv00_ct8_nezha).
