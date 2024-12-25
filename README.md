@@ -31,9 +31,7 @@ fi
 ![依赖.png](https://jpg.zjccc.us.kg/file/1734808200086_依赖.png)
 
 ## ql面板环境变量配置
-**1开 2关**
 
-**1开 2关**
 ## 放弃本地环境变量 同步serv00-vps.sh 采用远程变量 `serv00.json`
 ## 具体看VPS那里的解释
 
@@ -46,11 +44,7 @@ fi
 ![青龙面板12-23.png](https://jpg.zjccc.us.kg/file/1734962008390_青龙面板12-23.png)
 
 # vps教程
-**1开 2关**
 
-**1开 2关**
-
-**1开 2关**
 
 - **serv00vps 是vps保活脚本**
 ## JSON配置
