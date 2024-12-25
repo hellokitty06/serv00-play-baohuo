@@ -1,11 +1,17 @@
 #!/bin/bash
 
-# 定义颜色
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-NC='\033[0m'  # 没有颜色
-
+# 颜色定义函数
+colorize() {
+    local color="$1"
+    local text="$2"
+    case "$color" in
+        red)    echo -e "\033[0;31m$text\033[0m" ;;
+        green)  echo -e "\033[0;32m$text\033[0m" ;;
+        yellow) echo -e "\033[0;33m$text\033[0m" ;;
+        blue)   echo -e "\033[0;34m$text\033[0m" ;;
+        *)      echo "$text" ;;
+    esac
+}
 # 自动获取脚本的路径
 SCRIPT_PATH=$(realpath "$0")
 
@@ -49,7 +55,7 @@ install_packages
 
 # 下载配置文件
 download_json() {
-    VPS_JSON_URL="https://xxxxxxxxxxxxx/serv00.json"  # 配置文件 URL
+    VPS_JSON_URL="https://XXXXXXX/serv00.json"  # 配置文件 URL
     if ! curl -s "$VPS_JSON_URL" -o serv00.json; then
         echo -e "${RED}配置文件下载失败，尝试使用 wget 下载！${NC}"
         if ! wget -q "$VPS_JSON_URL" -O serv00.json; then
@@ -70,35 +76,29 @@ download_json() {
 
 download_json
 
-# 解析配置文件
-BOT_TOKEN=$(jq -r '.TELEGRAM_CONFIG.BOT_TOKEN' serv00.json)
-CHAT_ID=$(jq -r '.TELEGRAM_CONFIG.CHAT_ID' serv00.json)
+# 从远程 URL 获取配置文件内容
+CONFIG_URL="https://XXXXXXX/serv00.json"
+CONFIG_JSON=$(curl -s "$CONFIG_URL")
 
-# 解析通知方式
-NOTIFICATION=$(jq -r '.NOTIFICATION' serv00.json)
-ENABLED_NOTIFICATIONS=""
-if [ "$NOTIFICATION" -eq 1 ]; then
-    ENABLED_NOTIFICATIONS+="Telegram "
-elif [ "$NOTIFICATION" -eq 2 ]; then
-    ENABLED_NOTIFICATIONS+="无通知"
-else
-    ENABLED_NOTIFICATIONS="无通知"
-fi
+# 从 JSON 中提取配置信息
+NOTIFY_SERVICE=$(echo "$CONFIG_JSON" | jq -r '.NOTIFICATION')
+BOT_TOKEN=$(echo "$CONFIG_JSON" | jq -r '.TELEGRAM_CONFIG.BOT_TOKEN')
+CHAT_ID=$(echo "$CONFIG_JSON" | jq -r '.TELEGRAM_CONFIG.CHAT_ID')
+WXPUSHER_TOKEN=$(echo "$CONFIG_JSON" | jq -r '.WXPUSHER_TOKEN')
+PUSHPLUS_TOKEN=$(echo "$CONFIG_JSON" | jq -r '.PUSHPLUS_TOKEN')
+WXPUSHER_USER_ID=$(echo "$CONFIG_JSON" | jq -r '.WXPUSHER_USER_ID')
 
-echo -e "${YELLOW}当前启用的通知方式：${NC} $ENABLED_NOTIFICATIONS"
+SERVERS=$(echo "$CONFIG_JSON" | jq -r '.SERVERS | map(.SSH_USER + ":" +.SSH_PASS + ":" +.HOST) | join(",")')
 
-# 获取功能开关
-SINGBOX=$(jq -r '.FEATURES.SINGBOX' serv00.json)
-NEZHA_DASHBOARD=$(jq -r '.FEATURES.NEZHA_DASHBOARD' serv00.json)
-NEZHA_AGENT=$(jq -r '.FEATURES.NEZHA_AGENT' serv00.json)
-SUN_PANEL=$(jq -r '.FEATURES.SUN_PANEL' serv00.json)
-WEB_SSH=$(jq -r '.FEATURES.WEB_SSH' serv00.json)
-ALIST=$(jq -r '.FEATURES.ALIST' serv00.json)
+SINGBOX=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.SINGBOX')
+NEZHA_DASHBOARD=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.NEZHA_DASHBOARD')
+NEZHA_AGENT=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.NEZHA_AGENT')
+SUN_PANEL=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.SUN_PANEL')
+WEB_SSH=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.WEB_SSH')
+ALIST=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.ALIST')
+ENABLE_ALL_SERVICES=$(echo "$CONFIG_JSON" | jq -r '.ENABLE_ALL_SERVICES')
 
-# 检查 ENABLE_ALL_SERVICES
-ENABLE_ALL_SERVICES=$(jq -r '.ENABLE_ALL_SERVICES' serv00.json)
-
-# 如果 ENABLE_ALL_SERVICES 为 true，则启用所有服务
+# 启用所有服务时的配置
 if [ "$ENABLE_ALL_SERVICES" == "true" ]; then
     SINGBOX=1
     NEZHA_DASHBOARD=1
@@ -106,67 +106,99 @@ if [ "$ENABLE_ALL_SERVICES" == "true" ]; then
     SUN_PANEL=1
     WEB_SSH=1
     ALIST=1
+    colorize green "已启用所有服务"
 fi
 
-ENABLED_SERVICES=""
+# 显示启用的通知服务和服务
+colorize blue "启用的通知服务："
+case "$NOTIFY_SERVICE" in
+    1) colorize green "Telegram" ;;
+    2) colorize green "WxPusher" ;;
+    3) colorize green "PushPlus" ;;
+    4) colorize green "Telegram 和 WxPusher" ;;
+    5) colorize green "Telegram 和 PushPlus" ;;
+    *) colorize red "没有启用通知" ;;
+esac
 
-# 判断启用的服务
-if [ "$SINGBOX" -eq 1 ]; then
-    ENABLED_SERVICES+="SINGBOX "
-fi
-if [ "$NEZHA_AGENT" -eq 1 ]; then
-    ENABLED_SERVICES+="NEZHA_AGENT "
-fi
-if [ "$SUN_PANEL" -eq 1 ]; then
-    ENABLED_SERVICES+="SUN_PANEL "
-fi
-if [ "$WEB_SSH" -eq 1 ]; then
-    ENABLED_SERVICES+="WEB_SSH "
-fi
-if [ "$ALIST" -eq 1 ]; then
-    ENABLED_SERVICES+="ALIST "
-fi
+colorize blue "启用的服务："
+[[ "$SINGBOX" -eq 1 ]] && colorize green "Singbox"
+[[ "$NEZHA_DASHBOARD" -eq 1 ]] && colorize green "Nezha Dashboard"
+[[ "$NEZHA_AGENT" -eq 1 ]] && colorize green "Nezha Agent"
+[[ "$SUN_PANEL" -eq 1 ]] && colorize green "Sun Panel"
+[[ "$WEB_SSH" -eq 1 ]] && colorize green "Web SSH"
+[[ "$ALIST" -eq 1 ]] && colorize green "Alist"
 
-echo -e "${YELLOW}当前启用的服务：${NC} $ENABLED_SERVICES"
-
-# 发送 Telegram 通知的函数
+# 自定义 Telegram 通知函数（当 BOT_TOKEN 和 CHAT_ID 存在时才启用）
 send_tg_notification() {
     local message=$1
-    response=$(curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
-        -d "chat_id=$CHAT_ID" \
-        -d "text=$message")
-    
-    if [[ "$response" == *"ok"* ]]; then
-        echo -e "${GREEN}通知发送成功！${NC}"
+    [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ] && { echo "Telegram 通知未启用"; return 0; }
+    curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+        -d chat_id="${CHAT_ID}" \
+        -d text="${message}" -o /dev/null && colorize green "Telegram 消息发送成功" || colorize red "Telegram 消息发送失败"
+}
+
+# WxPusher 发送消息函数
+send_wxpusher_message() {
+    local title="$1"
+    local content="$2"
+    curl -s -X POST "https://wxpusher.zjiecode.com/api/send/message" \
+        -H "Content-Type: application/json" \
+        -d "{
+            \"appToken\": \"$WXPUSHER_TOKEN\",
+            \"content\": \"$content\",
+            \"title\": \"$title\",
+            \"uids\": [\"$WXPUSHER_USER_ID\"]
+        }" > /dev/null 2>&1
+    if [[ $? -eq 0 ]]; then
+        colorize green "WxPusher 消息发送成功"
     else
-        echo -e "${RED}通知发送失败！${NC}"
+        colorize red "WxPusher 消息发送失败"
     fi
 }
 
-# 统一检查各个服务的目录是否存在，跳过不存在的目录
-check_and_add_service() {
-    local service_name=$1
-    local service_path=$2
-    if sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "test -d $service_path"; then
-        ssh_cmd+="cd $service_path || true; pkill -f '$service_name' || true; nohup ./$service_name > ${service_name}_$(date +%Y%m%d_%H%M%S).log 2>&1 & "
-        services_started+="$service_name, "
+# 发送 PushPlus 消息的函数
+send_pushplus_message() {
+    local title="$1"
+    local content="$2"
+    curl -s -X POST "http://www.pushplus.plus/send" \
+        -H "Content-Type: application/json" \
+        -d "{\"token\":\"$PUSHPLUS_TOKEN\",\"title\":\"$title\",\"content\":\"<pre>$content</pre>\"}" > /dev/null 2>&1
+    if [[ $? -eq 0 ]]; then
+        colorize green "PushPlus 消息发送成功"
     else
-        echo -e "${RED}目录 $service_path 不存在，跳过 $service_name 服务${NC}"
+        colorize red "PushPlus 消息发送失败"
     fi
 }
 
-# 遍历每个服务器执行 SSH 操作
-for SERVER in $(jq -c '.SERVERS[]' serv00.json); do
-    SSH_USER=$(echo "$SERVER" | jq -r '.SSH_USER')
-    SSH_PASS=$(echo "$SERVER" | jq -r '.SSH_PASS')
-    SSH_HOST=$(echo "$SERVER" | jq -r '.HOST')
-
+# 将逗号分隔的账户信息解析成一个数组
+IFS=',' read -ra SERVER_LIST <<< "$SERVERS"  # 按逗号分隔服务器列表
+combined_message=""  # 用于汇总所有服务器执行情况的消息内容
+index=1  # 索引
+# 结果摘要标题
+RESULT_SUMMARY="青龙自动进程内容：\n———————————————————————\n SERVOO   \n———————————————————————\n"
+# 发送合并后的结果摘要
+combined_message="$RESULT_SUMMARY"
+for SERVER in "${SERVER_LIST[@]}"; do
+    # 分解每个服务器的用户名、密码、地址
+    IFS=':' read -r SSH_USER SSH_PASS SSH_HOST <<< "$SERVER"
     SERVER_ID="${SSH_USER}-${SSH_HOST}"
 
-    echo -e "${YELLOW}开始执行 $SERVER_ID${NC}"
+    colorize yellow "开始执行 ${SERVER_ID}"
 
     ssh_cmd=""
     services_started=""
+
+    # 统一检查各个服务的目录是否存在，跳过不存在的目录
+    check_and_add_service() {
+        local service_name=$1
+        local service_path=$2
+        if sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "test -d $service_path"; then
+            ssh_cmd+="cd $service_path || true; pkill -f '$service_name' || true; nohup ./$service_name > ${service_name}_$(date +%Y%m%d_%H%M%S).log 2>&1 & "
+            services_started+="$service_name "  # 服务以空格分隔
+        else
+            colorize red "目录 $service_path 不存在，跳过 $service_name 服务"
+        fi
+    }
 
     # 依次检查每个服务的目录并启动
     [[ "$SINGBOX" -eq 1 ]] && check_and_add_service "singbox" "/home/$SSH_USER/serv00-play/singbox"
@@ -179,17 +211,26 @@ for SERVER in $(jq -c '.SERVERS[]' serv00.json); do
     # 执行构建的 SSH 命令
     sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "$ssh_cmd"
 
-    # 检查 SSH 执行状态
-    if [ $? -eq 0 ]; then
-        if [ -n "$services_started" ]; then
-            services_started=${services_started%, }  # 去掉最后的逗号
-            if [ "$NOTIFICATION" -eq 1 ]; then
-                send_tg_notification "✅ [$SERVER_ID] 脚本执行完成：已执行服务：$services_started"
-            fi
-        else
-            echo -e "${RED}没有服务被启动，跳过通知！${NC}"
-        fi
+    # 拼接服务启动后的状态
+    if [ -n "$services_started" ]; then
+        colorize green "✅ $index. $SSH_USER 【 $SSH_HOST 】登录成功，启动服务：$services_started"
+        combined_message+="✅ $index. $SSH_USER 【 $SSH_HOST 】登录成功\n服务：$services_started\n"
     else
-        echo -e "${RED}SSH 执行失败：$SERVER_ID${NC}"
+        colorize red "❌ $index. $SSH_USER 【 $SSH_HOST 】登录失败"
+        combined_message+="❌ $index. $SSH_USER 【 $SSH_HOST 】 - 登录失败\n"
     fi
+    index=$((index + 1))
 done
+
+# 发送通知消息
+if [ "$NOTIFY_SERVICE" -eq 1 ] || [ "$NOTIFY_SERVICE" -eq 4 ]; then
+    send_tg_notification "$combined_message"
+fi
+if [ "$NOTIFY_SERVICE" -eq 2 ] || [ "$NOTIFY_SERVICE" -eq 4 ]; then
+    send_wxpusher_message "VPS 自动进程内容" "$combined_message"
+fi
+if [ "$NOTIFY_SERVICE" -eq 3 ] || [ "$NOTIFY_SERVICE" -eq 5 ]; then
+    send_pushplus_message "VPS 自动进程内容" "$combined_message"
+fi
+
+colorize green "脚本执行完毕，通知已发送！"
