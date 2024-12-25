@@ -53,28 +53,6 @@ install_packages() {
 
 install_packages
 
-# 下载配置文件
-download_json() {
-    VPS_JSON_URL="https://XXXXXXX/serv00.json"  # 配置文件 URL
-    if ! curl -s "$VPS_JSON_URL" -o serv00.json; then
-        echo -e "${RED}配置文件下载失败，尝试使用 wget 下载！${NC}"
-        if ! wget -q "$VPS_JSON_URL" -O serv00.json; then
-            echo -e "${RED}配置文件下载失败，请检查下载地址是否正确！${NC}"
-            exit 1
-        else
-            echo -e "${GREEN}配置文件通过 wget 下载成功！${NC}"
-        fi
-    else
-        echo -e "${GREEN}配置文件通过 curl 下载成功！${NC}"
-    fi
-
-    if [[ ! -s "serv00.json" ]]; then
-        echo -e "${RED}配置文件 serv00.json 不存在或为空${NC}"
-        exit 1
-    fi
-}
-
-download_json
 
 # 从远程 URL 获取配置文件内容
 CONFIG_URL="https://XXXXXXX/serv00.json"
@@ -132,20 +110,22 @@ colorize blue "启用的服务："
 send_tg_notification() {
     local message=$1
     [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ] && { echo "Telegram 通知未启用"; return 0; }
+    local escaped_message=$(echo "$message" | sed 's/ /%20/g' | sed 's/\n/%0A/g')  # 将空格替换为 %20，换行替换为 %0A
     curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
         -d chat_id="${CHAT_ID}" \
-        -d text="${message}" -o /dev/null && colorize green "Telegram 消息发送成功" || colorize red "Telegram 消息发送失败"
+        -d text="${escaped_message}" -o /dev/null && colorize green "Telegram 消息发送成功" || colorize red "Telegram 消息发送失败"
 }
 
 # WxPusher 发送消息函数
 send_wxpusher_message() {
     local title="$1"
     local content="$2"
+    local escaped_content=$(echo "$content" | sed 's/ /%20/g' | sed 's/\n/\\n/g')  # 将空格替换为 %20，换行替换为 \n
     curl -s -X POST "https://wxpusher.zjiecode.com/api/send/message" \
         -H "Content-Type: application/json" \
         -d "{
             \"appToken\": \"$WXPUSHER_TOKEN\",
-            \"content\": \"$content\",
+            \"content\": \"$escaped_content\",
             \"title\": \"$title\",
             \"uids\": [\"$WXPUSHER_USER_ID\"]
         }" > /dev/null 2>&1
@@ -160,9 +140,10 @@ send_wxpusher_message() {
 send_pushplus_message() {
     local title="$1"
     local content="$2"
+    local escaped_content=$(echo "$content" | sed 's/ /%20/g' | sed 's/\n/\\n/g')  # 将空格替换为 %20，换行替换为 \n
     curl -s -X POST "http://www.pushplus.plus/send" \
         -H "Content-Type: application/json" \
-        -d "{\"token\":\"$PUSHPLUS_TOKEN\",\"title\":\"$title\",\"content\":\"<pre>$content</pre>\"}" > /dev/null 2>&1
+        -d "{\"token\":\"$PUSHPLUS_TOKEN\",\"title\":\"$title\",\"content\":\"<pre>$escaped_content</pre>\"}" > /dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         colorize green "PushPlus 消息发送成功"
     else
@@ -175,7 +156,7 @@ IFS=',' read -ra SERVER_LIST <<< "$SERVERS"  # 按逗号分隔服务器列表
 combined_message=""  # 用于汇总所有服务器执行情况的消息内容
 index=1  # 索引
 # 结果摘要标题
-RESULT_SUMMARY="青龙自动进程内容：%0A———————————————————————%0A SERVOO   %0A———————————————————————%0A"
+RESULT_SUMMARY="青龙自动进程内容："$'\n'"———————————————————————"$'\n'"  SERV00 "$'\n'"———————————————————————"$'\n'
 # 发送合并后的结果摘要
 combined_message="$RESULT_SUMMARY"
 for SERVER in "${SERVER_LIST[@]}"; do
@@ -193,7 +174,7 @@ for SERVER in "${SERVER_LIST[@]}"; do
         local service_name=$1
         local service_path=$2
         if sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "test -d $service_path"; then
-            ssh_cmd+="cd $service_path || true; pkill -f '$service_name' || true; nohup ./$service_name > ${service_name}_$(date +%Y%m%d_%H%M%S).log 2>&1 & "
+            ssh_cmd+="cd $service_path || true; pkill -f '$service_name' || true; nohup./$service_name > ${service_name}_$(date +%Y%m%d_%H%M%S).log 2>&1 & "
             services_started+="$service_name "  # 服务以空格分隔
         else
             colorize red "目录 $service_path 不存在，跳过 $service_name 服务"
@@ -208,18 +189,25 @@ for SERVER in "${SERVER_LIST[@]}"; do
     [[ "$WEB_SSH" -eq 1 ]] && check_and_add_service "wssh" "/home/$SSH_USER/serv00-play/webssh"
     [[ "$ALIST" -eq 1 ]] && check_and_add_service "alist" "/home/$SSH_USER/serv00-play/alist"
 
-    # 执行构建的 SSH 命令
-    sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "$ssh_cmd"
 
-    # 拼接服务启动后的状态
-    if [ -n "$services_started" ]; then
-        colorize green "✅ $index. $SSH_USER 【 $SSH_HOST 】登录成功，启动服务：$services_started"
-        combined_message+="✅ $index. $SSH_USER 【 $SSH_HOST 】登录成功%0A服务：$services_started%0A"
+# 执行构建的 SSH 命令
+sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "$ssh_cmd"
+if [[ $? -eq 0 ]]; then
+    if [ "$NOTIFY_SERVICE" -eq 1 ] || [ "$NOTIFY_SERVICE" -eq 4 ] || [ "$NOTIFY_SERVICE" -eq 5 ]; then
+        combined_message+="✅ $index. $SSH_USER 【 $SSH_HOST 】 登录成功 ‖ $services_started %0A "
     else
-        colorize red "❌ $index. $SSH_USER 【 $SSH_HOST 】登录失败"
-        combined_message+="❌ $index. $SSH_USER 【 $SSH_HOST 】 - 登录失败%0A"
+        combined_message+="✅ $index. $SSH_USER 【 $SSH_HOST 】 登录成功 ‖ $services_started \n "
     fi
-    index=$((index + 1))
+    colorize green "$SSH_USER 【 $SSH_HOST 】 登录成功 ‖ $services_started"
+else
+    if [ "$NOTIFY_SERVICE" -eq 1 ] || [ "$NOTIFY_SERVICE" -eq 4 ] || [ "$NOTIFY_SERVICE" -eq 5 ]; then
+        combined_message+="❌ $index. $SSH_USER 【 $SSH_HOST 】 登录失败 %0A "
+    else
+        combined_message+="❌ $index. $SSH_USER 【 $SSH_HOST 】 登录失败 \n "
+    fi
+    colorize red "$SSH_USER 【 $SSH_HOST 】 登录失败"
+fi
+((index++))
 done
 
 # 发送通知消息
