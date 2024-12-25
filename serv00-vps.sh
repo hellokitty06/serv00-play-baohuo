@@ -175,7 +175,7 @@ IFS=',' read -ra SERVER_LIST <<< "$SERVERS"  # 按逗号分隔服务器列表
 combined_message=""  # 用于汇总所有服务器执行情况的消息内容
 index=1  # 索引
 # 结果摘要标题
-RESULT_SUMMARY="青龙自动进程内容：\n———————————————————————\n SERVOO   \n———————————————————————\n"
+RESULT_SUMMARY="青龙自动进程内容：%0A———————————————————————%0A SERVOO   %0A———————————————————————%0A"
 # 发送合并后的结果摘要
 combined_message="$RESULT_SUMMARY"
 for SERVER in "${SERVER_LIST[@]}"; do
@@ -214,10 +214,10 @@ for SERVER in "${SERVER_LIST[@]}"; do
     # 拼接服务启动后的状态
     if [ -n "$services_started" ]; then
         colorize green "✅ $index. $SSH_USER 【 $SSH_HOST 】登录成功，启动服务：$services_started"
-        combined_message+="✅ $index. $SSH_USER 【 $SSH_HOST 】登录成功\n服务：$services_started\n"
+        combined_message+="✅ $index. $SSH_USER 【 $SSH_HOST 】登录成功%0A服务：$services_started%0A"
     else
         colorize red "❌ $index. $SSH_USER 【 $SSH_HOST 】登录失败"
-        combined_message+="❌ $index. $SSH_USER 【 $SSH_HOST 】 - 登录失败\n"
+        combined_message+="❌ $index. $SSH_USER 【 $SSH_HOST 】 - 登录失败%0A"
     fi
     index=$((index + 1))
 done
