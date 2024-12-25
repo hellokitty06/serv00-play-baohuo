@@ -13,14 +13,9 @@ colorize() {
     esac
 }
 
-# 从本地 获取配置文件内容
-CONFIG_FILE="serv00.json"
-if [ -f "$CONFIG_FILE" ]; then
-    CONFIG_JSON=$(cat "$CONFIG_FILE")
-else
-    echo "配置文件 $CONFIG_FILE 不存在，脚本无法继续执行"
-    exit 1
-fi
+# 从远程链接 获取配置文件内容
+CONFIG_URL="xxxxxxx/serv00.json"
+CONFIG_JSON=$(curl -s "$CONFIG_URL")
 
 # 从 JSON 中提取配置信息
 NOTIFY_SERVICE=$(echo "$CONFIG_JSON" | jq -r '.NOTIFICATION')
