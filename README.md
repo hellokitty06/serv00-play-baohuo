@@ -1,8 +1,7 @@
 # serv00-play 配套保活
 
 ## 2024/12/23/00:45 更新serv00-ql  增加了多个通知方式 
-## 2024/12/23/21:48 更新serv00-ql和serv00-vps  修复了webssh的bug,增加了alist 增加了服务项总开关`ENABLE_ALL_SERVICES` 修改了通知逻辑，动态通知。
-## 2024/12/25/09:00 更新serv00-ql和serv00-vps  延长了运行时间 放弃本地环境变量 同步 `serv00-vps.sh` 采用远程变量 `serv00.json` 应要求改成合并通知，就一条消息  。 
+
 ## 2024/12/27/09:00 更新serv00-ql和serv00-vps  修复推送通知的BUG  serv00-ql 改为 默认从本地 `serv00.json` 获取变量
 
 ## 不想远程的改为本地
