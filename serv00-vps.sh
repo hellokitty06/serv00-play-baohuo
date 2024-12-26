@@ -126,18 +126,21 @@ send_tg_notification() {
     fi
 }
 
-# WxPusher 发送消息函数
+# 发送 WXPUSHER 消息
 send_wxpusher_message() {
-    local title="$1"
-    local content="$2"
-    curl -s -X POST "https://wxpusher.zjiecode.com/api/send/message" \
-        -H "Content-Type: application/json" \
-        -d "{
-            \"appToken\": \"$WXPUSHER_TOKEN\",
-            \"content\": \"$escaped_content\",
-            \"title\": \"$title\",
-            \"uids\": [\"$WXPUSHER_USER_ID\"]
-        }" > /dev/null 2>&1
+  local title="$1"
+  local content="$2"
+  if [[ -z "$WXPUSHER_TOKEN" || -z "$WXPUSHER_USER_ID" ]]; then
+    return
+  fi
+  curl -s -X POST "https://wxpusher.zjiecode.com/api/send/message" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"appToken\": \"$WXPUSHER_TOKEN\",
+      \"content\": \"$content\",
+      \"title\": \"$title\",
+      \"uids\": [\"$WXPUSHER_USER_ID\"]
+    }" > /dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         colorize green "WxPusher 消息发送成功"
     else
@@ -145,12 +148,20 @@ send_wxpusher_message() {
     fi
 }
 
-# 发送 PushPlus 消息的函数
+# 发送 PUSHPLUS 消息
 send_pushplus_message() {
-    local title="$1"
-    curl -s -X POST "http://www.pushplus.plus/send" \
-        -H "Content-Type: application/json" \
-        -d "{\"token\":\"$PUSHPLUS_TOKEN\",\"title\":\"$title\",\"content\":\"<pre>$escaped_content</pre>\"}" > /dev/null 2>&1
+  local title="$1"
+  local content="$2"
+  if [[ -z "$PUSHPLUS_TOKEN" ]]; then
+    return
+  fi
+  curl -s -X POST "http://www.pushplus.plus/send" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"token\": \"$PUSHPLUS_TOKEN\",
+      \"title\": \"$title\",
+      \"content\": \"<pre>$content</pre>\"
+    }"> /dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         colorize green "PushPlus 消息发送成功"
     else
