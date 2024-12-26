@@ -13,7 +13,7 @@ colorize() {
     esac
 }
 
-# 从远程链接 获取配置文件内容
+# 从本地 获取配置文件内容
 CONFIG_FILE="serv00.json"
 if [ -f "$CONFIG_FILE" ]; then
     CONFIG_JSON=$(cat "$CONFIG_FILE")
