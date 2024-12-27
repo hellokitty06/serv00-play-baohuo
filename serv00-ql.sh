@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 颜色定义函数
+# 颜色定义函数，用于根据不同颜色参数给文本添加相应的颜色显示效果
 colorize() {
     local color="$1"
     local text="$2"
@@ -13,7 +13,8 @@ colorize() {
     esac
 }
 
-# 从远程链接 获取配置文件内容
+# 从本地获取配置文件内容，如果配置文件不存在则退出脚本
+# 该配置文件包含了后续脚本运行所需的各项配置信息
 CONFIG_FILE="serv00.json"
 if [ -f "$CONFIG_FILE" ]; then
     CONFIG_JSON=$(cat "$CONFIG_FILE")
@@ -22,7 +23,8 @@ else
     exit 1
 fi
 
-# 从 JSON 中提取配置信息
+# 从 JSON 格式的配置文件中提取通知服务相关的配置信息
+# 例如通知服务的类型（Telegram、WxPusher、PushPlus等）以及对应服务所需的各种token、id等
 NOTIFY_SERVICE=$(echo "$CONFIG_JSON" | jq -r '.NOTIFICATION')
 BOT_TOKEN=$(echo "$CONFIG_JSON" | jq -r '.TELEGRAM_CONFIG.BOT_TOKEN')
 CHAT_ID=$(echo "$CONFIG_JSON" | jq -r '.TELEGRAM_CONFIG.CHAT_ID')
@@ -30,8 +32,12 @@ WXPUSHER_TOKEN=$(echo "$CONFIG_JSON" | jq -r '.WXPUSHER_TOKEN')
 PUSHPLUS_TOKEN=$(echo "$CONFIG_JSON" | jq -r '.PUSHPLUS_TOKEN')
 WXPUSHER_USER_ID=$(echo "$CONFIG_JSON" | jq -r '.WXPUSHER_USER_ID')
 
+# 提取服务器相关信息，将多个服务器的信息以逗号分隔的字符串形式存储
+# 每个服务器信息包含用户名、密码和主机地址，后续会据此进行服务器相关操作
 SERVERS=$(echo "$CONFIG_JSON" | jq -r '.SERVERS | map(.SSH_USER + ":" +.SSH_PASS + ":" +.HOST) | join(",")')
 
+# 提取各个服务（如Singbox、Nezha Dashboard等）的启用状态配置信息
+# 用于判断是否需要启动相应服务
 SINGBOX=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.SINGBOX')
 NEZHA_DASHBOARD=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.NEZHA_DASHBOARD')
 NEZHA_AGENT=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.NEZHA_AGENT')
@@ -40,7 +46,8 @@ WEB_SSH=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.WEB_SSH')
 ALIST=$(echo "$CONFIG_JSON" | jq -r '.FEATURES.ALIST')
 ENABLE_ALL_SERVICES=$(echo "$CONFIG_JSON" | jq -r '.ENABLE_ALL_SERVICES')
 
-# 启用所有服务时的配置
+# 启用所有服务时的配置，若配置中启用所有服务的标识为true
+# 则将各个服务的启用状态都设置为1，表示全部启用，并输出提示信息
 if [ "$ENABLE_ALL_SERVICES" == "true" ]; then
     SINGBOX=1
     NEZHA_DASHBOARD=1
@@ -51,7 +58,8 @@ if [ "$ENABLE_ALL_SERVICES" == "true" ]; then
     colorize green "已启用所有服务"
 fi
 
-# 显示启用的通知服务和服务，添加分隔线
+# 显示启用的通知服务，根据不同的配置值展示相应的通知服务名称
+# 并添加分隔线用于区分不同部分的显示内容
 colorize blue "启用的通知服务："
 case "$NOTIFY_SERVICE" in
     1) colorize green "Telegram" ;;
@@ -62,6 +70,9 @@ case "$NOTIFY_SERVICE" in
     *) colorize red "没有启用通知" ;;
 esac
 echo "——————————————————————————————"
+
+# 显示启用的服务，根据各个服务的启用状态配置，展示相应启用的服务名称
+# 同样添加分隔线用于区分不同部分的显示内容
 colorize blue "启用的服务："
 [[ "$SINGBOX" -eq 1 ]] && colorize green "Singbox"
 [[ "$NEZHA_DASHBOARD" -eq 1 ]] && colorize green "Nezha Dashboard"
@@ -71,19 +82,21 @@ colorize blue "启用的服务："
 [[ "$ALIST" -eq 1 ]] && colorize green "Alist"
 echo "———————————————————————————————"
 
-# 发送 TELEGRAM 消息
+# 发送 TELEGRAM 消息的函数
+# 接收消息标题和内容作为参数，在具备BOT_TOKEN和CHAT_ID的情况下
+# 通过curl命令向Telegram API发送消息，并根据发送结果输出相应提示信息
 send_tg_notification() {
-  local title="$1"
-  local content="$2"
-  if [[ -z "$BOT_TOKEN" || -z "$CHAT_ID" ]]; then
-    return
-  fi
-  curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"chat_id\": \"$CHAT_ID\",
-      \"text\": \"$title $content\"
-    }" > /dev/null 2>&1
+    local title="$1"
+    local content="$2"
+    if [[ -z "$BOT_TOKEN" || -z "$CHAT_ID" ]]; then
+        return
+    fi
+    curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"chat_id\": \"$CHAT_ID\",
+          \"text\": \"$title $content\"
+        }" > /dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         colorize green "TG 消息发送成功"
     else
@@ -91,21 +104,23 @@ send_tg_notification() {
     fi
 }
 
-# 发送 WXPUSHER 消息
+# 发送 WXPUSHER 消息的函数
+# 接收消息标题和内容作为参数，在具备WXPUSHER_TOKEN和WXPUSHER_USER_ID的情况下
+# 通过curl命令向WxPusher API发送消息，并根据发送结果输出相应提示信息
 send_wxpusher_message() {
-  local title="$1"
-  local content="$2"
-  if [[ -z "$WXPUSHER_TOKEN" || -z "$WXPUSHER_USER_ID" ]]; then
-    return
-  fi
-  curl -s -X POST "https://wxpusher.zjiecode.com/api/send/message" \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"appToken\": \"$WXPUSHER_TOKEN\",
-      \"content\": \"$content\",
-      \"title\": \"$title\",
-      \"uids\": [\"$WXPUSHER_USER_ID\"]
-    }" > /dev/null 2>&1
+    local title="$1"
+    local content="$2"
+    if [[ -z "$WXPUSHER_TOKEN" || -z "$WXPUSHER_USER_ID" ]]; then
+        return
+    fi
+    curl -s -X POST "https://wxpusher.zjiecode.com/api/send/message" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"appToken\": \"$WXPUSHER_TOKEN\",
+          \"content\": \"$content\",
+          \"title\": \"$title\",
+          \"uids\": [\"$WXPUSHER_USER_ID\"]
+        }" > /dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         colorize green "WxPusher 消息发送成功"
     else
@@ -113,20 +128,22 @@ send_wxpusher_message() {
     fi
 }
 
-# 发送 PUSHPLUS 消息
+# 发送 PUSHPLUS 消息的函数
+# 接收消息标题和内容作为参数，在具备PUSHPLUS_TOKEN的情况下
+# 通过curl命令向PushPlus API发送消息，并根据发送结果输出相应提示信息
 send_pushplus_message() {
-  local title="$1"
-  local content="$2"
-  if [[ -z "$PUSHPLUS_TOKEN" ]]; then
-    return
-  fi
-  curl -s -X POST "http://www.pushplus.plus/send" \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"token\": \"$PUSHPLUS_TOKEN\",
-      \"title\": \"$title\",
-      \"content\": \"<pre>$content</pre>\"
-    }"> /dev/null 2>&1
+    local title="$1"
+    local content="$2"
+    if [[ -z "$PUSHPLUS_TOKEN" ]]; then
+        return
+    fi
+    curl -s -X POST "http://www.pushplus.plus/send" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"token\": \"$PUSHPLUS_TOKEN\",
+          \"title\": \"$title\",
+          \"content\": \"<pre>$content</pre>\"
+        }" > /dev/null 2>&1
     if [[ $? -eq 0 ]]; then
         colorize green "PushPlus 消息发送成功"
     else
@@ -135,16 +152,20 @@ send_pushplus_message() {
 }
 
 # 定义进程相关数组（对应不同服务进程及其友好名称）
+# 用于在检查进程状态时将进程名转换为更易读的友好名称进行展示
 declare -A processes=(
     ["singbox"]="Singbox"
-    ["nezha-dashboard"]="Nezha Dashboard"
-    ["nezha-agent"]="Nezha Agent"
+    ["nezha-dashboard"]="哪吒面板"
+    ["nezha-agent"]="哪吒探针 V1"
     ["sun-panel"]="Sun Panel"
     ["wssh"]="Web SSH"
     ["alist"]="Alist"
 )
 
 # 新增函数用于检查进程状态
+# 接收服务器的用户名、密码和主机地址作为参数
+# 通过ssh连接到服务器并获取进程列表，然后比对预设的服务进程是否存在
+# 根据比对结果返回相应状态码，并输出相应提示信息
 check_process_status() {
     local SSH_USER="$1"
     local SSH_PASS="$2"
@@ -166,88 +187,97 @@ check_process_status() {
 }
 
 # 掩码处理函数：对用户名进行掩码，只显示最后三位
+# 用于在输出信息中对敏感的用户名信息进行部分隐藏，增强安全性和隐私性
 mask_username() {
     local username="$1"
     echo "****${username: -3}"
 }
 
 # 掩码处理函数：对服务器名进行掩码，只显示第一个字段（以.为分隔符）
+# 同样用于在输出信息中对服务器名进行部分处理，隐藏不必要的详细信息
 mask_server() {
     local server="$1"
     echo "$server" | cut -d '.' -f 1
 }
 
-# 将逗号分隔的账户信息解析成一个数组
-IFS=',' read -ra SERVER_LIST <<< "$SERVERS"  # 按逗号分隔服务器列表
-combined_message=""  # 用于汇总所有服务器执行情况的消息内容
-index=1  # 索引
-# 结果摘要标题
-RESULT_SUMMARY="青龙自动进程内容：\n———————————————————————\n SERV00 \n———————————————————————\n"
-# 发送合并后的结果摘要
-combined_message="$RESULT_SUMMARY"
-for SERVER in "${SERVER_LIST[@]}"; do
-    # 分解每个服务器的用户名、密码、地址
-    IFS=':' read -r SSH_USER SSH_PASS SSH_HOST <<< "$SERVER"
-    # 获取掩码后的用户名和服务器名
-    MASKED_USERNAME=$(mask_username "$SSH_USER")
-    MASKED_SERVER=$(mask_server "$SSH_HOST")
-    SERVER_ID="${MASKED_USERNAME}-${MASKED_SERVER}"
+# 处理服务器相关操作的主函数，包含检查服务目录、启动服务、检查进程状态等逻辑
+# 接收服务器列表信息和通知服务配置作为参数，遍历服务器列表对每个服务器执行相关操作
+# 并汇总各服务器操作情况生成消息内容，最后根据通知服务配置发送相应通知消息
+handle_servers() {
+    local servers="$1"
+    local notify_service="$2"
+    IFS=',' read -ra SERVER_LIST <<< "$servers"
+    combined_message=""  # 用于汇总所有服务器执行情况的消息内容
+    index=1  # 索引，用于记录处理的服务器序号
 
-    colorize yellow "开始执行 ${SERVER_ID}"
+    # 结果摘要标题，用于构建最终发送的通知消息内容的开头部分
+    RESULT_SUMMARY="青龙自动进程内容：\n———————————————————————\n SERV00 \n———————————————————————\n"
+    combined_message="$RESULT_SUMMARY"
 
-    ssh_cmd=""
-    services_started=""
+    for SERVER in "${SERVER_LIST[@]}"; do
+        # 分解每个服务器的用户名、密码、地址
+        IFS=':' read -r SSH_USER SSH_PASS SSH_HOST <<< "$SERVER"
 
-# 统一检查各个服务的目录是否存在，跳过不存在的目录
-check_and_add_service() {
-    local service_name=$1
-    local service_path=$2
-    if sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "test -d $service_path"; then
-        ssh_cmd+="cd $service_path || true; pkill -f '$service_name' || true; nohup./$service_name > /dev/null 2>&1 & "
-        services_started+="$service_name "  # 服务以空格分隔
-    else
-        colorize red "目录 $service_path 不存在，跳过 $service_name 服务"
+        # 获取掩码后的用户名和服务器名，用于后续输出展示，增强信息安全性
+        MASKED_USERNAME=$(mask_username "$SSH_USER")
+        MASKED_SERVER=$(mask_server "$SSH_HOST")
+        SERVER_ID="${MASKED_USERNAME}-${MASKED_SERVER}"
+
+        colorize yellow "开始执行 ${SERVER_ID}"
+
+        ssh_cmd=""
+        services_started=""
+
+        # 统一检查各个服务的目录是否存在，跳过不存在的目录
+        check_and_add_service() {
+            local service_name=$1
+            local service_path=$2
+            if sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "test -d $service_path"; then
+                ssh_cmd+="cd $service_path || true; pkill -f '$service_name' || true; nohup./$service_name > /dev/null 2>&1 & "
+                services_started+="$service_name "  # 服务以空格分隔
+            else
+                colorize red "目录不存在，跳过 $service_name 服务"
+            fi
+        }
+
+        # 依次检查每个服务的目录并启动
+        [[ "$SINGBOX" -eq 1 ]] && check_and_add_service "singbox" "/home/$SSH_USER/serv00-play/singbox"
+        [[ "$NEZHA_DASHBOARD" -eq 1 ]] && check_and_add_service "nezha-dashboard" "/home/$SSH_USER/nezha_app/dashboard"
+        [[ "$NEZHA_AGENT" -eq 1 ]] && check_and_add_service "nezha-agent" "/home/$SSH_USER/nezha_app/agent"
+        [[ "$SUN_PANEL" -eq 1 ]] && check_and_add_service "sun-panel" "/home/$SSH_USER/serv00-play/sunpanel"
+        [[ "$WEB_SSH" -eq 1 ]] && check_and_add_service "wssh" "/home/$SSH_USER/serv00-play/webssh"
+        [[ "$ALIST" -eq 1 ]] && check_and_add_service "alist" "/home/$SSH_USER/serv00-play/alist"
+
+        # 执行构建的 SSH 命令，在服务器上执行相应操作（如启动服务等）
+        sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "$ssh_cmd"
+
+        # 拼接服务启动后的状态信息到汇总消息内容中，使用掩码后的用户名和服务器名
+        if [ -n "$services_started" ]; then
+            colorize green "✅ $index. $MASKED_USERNAME 【 $MASKED_SERVER 】登录成功 \n 重启服务：$services_started\n——————————————————————"
+            combined_message+="✅ $index. $MASKED_USERNAME 【 $MASKED_SERVER 】登录成功 \n 重启服务：$services_started\n———————————————————————\n"
+        else
+            colorize red "❌ $index. $MASKED_USERNAME 【 $MASKED_SERVER 】登录失败"
+            combined_message+="❌ $index. $MASKED_USERNAME 【 $MASKED_SERVER 】 - 登录失败\n"
+        fi
+        index=$((index + 1))
+    done
+
+    # 根据通知服务配置发送通知消息，消息内容中的用户名和服务器名也是掩码后的
+    if [ "$notify_service" -eq 1 ] || [ "$notify_service" -eq 4 ] || [ "$notify_service" -eq 5 ]; then
+        send_tg_notification "$combined_message"
+    fi
+    if [ "$notify_service" -eq 2 ] || [ "$notify_service" -eq 4 ]; then
+        send_wxpusher_message "VPS 自动进程内容" "$combined_message"
+    fi
+    if [ "$notify_service" -eq 3 ] || [ "$notify_service" -eq 5 ]; then
+        send_pushplus_message "VPS 自动进程内容" "$combined_message"
     fi
 }
 
-# 依次检查每个服务的目录并启动
-[[ "$SINGBOX" -eq 1 ]] && check_and_add_service "singbox" "/home/$SSH_USER/serv00-play/singbox"
-[[ "$NEZHA_DASHBOARD" -eq 1 ]] && check_and_add_service "nezha-dashboard" "/home/$SSH_USER/nezha_app/dashboard"
-[[ "$NEZHA_AGENT" -eq 1 ]] && check_and_add_service "nezha-agent" "/home/$SSH_USER/nezha_app/agent"
-[[ "$SUN_PANEL" -eq 1 ]] && check_and_add_service "sun-panel" "/home/$SSH_USER/serv00-play/sunpanel"
-[[ "$WEB_SSH" -eq 1 ]] && check_and_add_service "wssh" "/home/$SSH_USER/serv00-play/webssh"
-[[ "$ALIST" -eq 1 ]] && check_and_add_service "alist" "/home/$SSH_USER/serv00-play/alist"
-    # 执行构建的 SSH 命令
-    sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "$ssh_cmd"
+# 主函数，用于调用其他函数，按照逻辑顺序执行脚本的主要流程
+main() {
+    handle_servers "$SERVERS" "$NOTIFY_SERVICE"
+    colorize green "脚本执行完毕，通知已发送！"
+}
 
-    # 新增：检查进程状态
-    if check_process_status "$SSH_USER" "$SSH_PASS" "$SSH_HOST"; then
-        colorize green "相关进程在 $SSH_HOST 上已成功启动"
-    else
-        colorize red "部分或全部相关进程在 $SSH_HOST 上未启动，可能需要重启服务"
-        # 这里可以根据具体需求添加进一步的重启逻辑，比如再次调用对应的启动服务函数等
-    fi
-
-    # 拼接服务启动后的状态，使用掩码后的用户名和服务器名
-    if [ -n "$services_started" ]; then
-        colorize green "✅ $index. $MASKED_USERNAME 【 $MASKED_SERVER 】登录成功 \n 拉起服务：$services_started\n———————————————————————"
-        combined_message+="✅ $index. $MASKED_USERNAME 【 $MASKED_SERVER 】登录成功 \n 拉起服务：$services_started\n———————————————————————"
-    else
-        colorize red "❌ $index. $MASKED_USERNAME 【 $MASKED_SERVER 】登录失败"
-        combined_message+="❌ $index. $MASKED_USERNAME 【 $MASKED_SERVER 】 - 登录失败\n"
-    fi
-    index=$((index + 1))
-done
-
-# 发送通知消息，消息内容中的用户名和服务器名也是掩码后的
-if [ "$NOTIFY_SERVICE" -eq 1 ] || [ "$NOTIFY_SERVICE" -eq 4 ] || [ "$NOTIFY_SERVICE" -eq 5 ]; then
-    send_tg_notification "$combined_message"
-fi
-if [ "$NOTIFY_SERVICE" -eq 2 ] || [ "$NOTIFY_SERVICE" -eq 4 ]; then
-    send_wxpusher_message "VPS 自动进程内容" "$combined_message"
-fi
-if [ "$NOTIFY_SERVICE" -eq 3 ] || [ "$NOTIFY_SERVICE" -eq 5 ]; then
-    send_pushplus_message "VPS 自动进程内容" "$combined_message"
-fi
-
-colorize green "脚本执行完毕，通知已发送！"
+main
