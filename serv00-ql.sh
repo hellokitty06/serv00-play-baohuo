@@ -179,9 +179,7 @@ mask_server() {
 
 # 将逗号分隔的账户信息解析成一个数组
 IFS=',' read -ra SERVER_LIST <<< "$SERVERS"  # 按逗号分隔服务器列表
-
-# 用于汇总所有服务器执行情况的消息内容
-combined_message=""  
+combined_message=""  # 用于汇总所有服务器执行情况的消息内容
 index=1  # 索引
 # 结果摘要标题
 RESULT_SUMMARY="青龙自动进程内容：\n———————————————————————\n SERV00 \n———————————————————————\n"
@@ -200,27 +198,25 @@ for SERVER in "${SERVER_LIST[@]}"; do
     ssh_cmd=""
     services_started=""
 
-    # 统一检查各个服务的目录是否存在，跳过不存在的目录
-    check_and_add_service() {
-        local service_name=$1
-        local service_path=$2
-        if sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "test -d $service_path"; then
-            ssh_cmd+="cd $service_path || true; pkill -f '$service_name' || true; nohup./$service_name > ${service_name}_$(date +%Y%m%d_%H%M%S).log 2>&1 & "
-            services_started+="$service_name "  # 服务以空格分隔
-        else
-            colorize red "目录 $service_path 不存在，跳过 $service_name 服务"
-        fi
-    }
+# 统一检查各个服务的目录是否存在，跳过不存在的目录
+check_and_add_service() {
+    local service_name=$1
+    local service_path=$2
+    if sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "test -d $service_path"; then
+        ssh_cmd+="cd $service_path || true; pkill -f '$service_name' || true; nohup./$service_name > /dev/null 2>&1 & "
+        services_started+="$service_name "  # 服务以空格分隔
+    else
+        colorize red "目录 $service_path 不存在，跳过 $service_name 服务"
+    fi
+}
 
-    # 依次检查每个服务的目录并启动
-    [[ "$SINGBOX" -eq 1 ]] && check_and_add_service "singbox" "/home/$SSH_USER/serv00-play/singbox"
-    [[ "$NEZHA_DASHBOARD" -eq 1 ]] && check_and_add_service "nezha-dashboard" "/home/$SSH_USER/nezha_app/dashboard"
-    [[ "$NEZHA_AGENT" -eq 1 ]] && check_and_add_service "nezha-agent" "/home/$SSH_USER/nezha_app/agent"
-    [[ "$SUN_PANEL" -eq 1 ]] && check_and_add_service "sun-panel" "/home/$SSH_USER/serv00-play/sunpanel"
-    [[ "$WEB_SSH" -eq 1 ]] && check_and_add_service "wssh" "/home/$SSH_USER/serv00-play/webssh"
-    [[ "$ALIST" -eq 1 ]] && check_and_add_service "alist" "/home/$SSH_USER/serv00-play/alist"
-
-
+# 依次检查每个服务的目录并启动
+[[ "$SINGBOX" -eq 1 ]] && check_and_add_service "singbox" "/home/$SSH_USER/serv00-play/singbox"
+[[ "$NEZHA_DASHBOARD" -eq 1 ]] && check_and_add_service "nezha-dashboard" "/home/$SSH_USER/nezha_app/dashboard"
+[[ "$NEZHA_AGENT" -eq 1 ]] && check_and_add_service "nezha-agent" "/home/$SSH_USER/nezha_app/agent"
+[[ "$SUN_PANEL" -eq 1 ]] && check_and_add_service "sun-panel" "/home/$SSH_USER/serv00-play/sunpanel"
+[[ "$WEB_SSH" -eq 1 ]] && check_and_add_service "wssh" "/home/$SSH_USER/serv00-play/webssh"
+[[ "$ALIST" -eq 1 ]] && check_and_add_service "alist" "/home/$SSH_USER/serv00-play/alist"
     # 执行构建的 SSH 命令
     sshpass -p "$SSH_PASS" ssh -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null "$SSH_USER@$SSH_HOST" "$ssh_cmd"
 
