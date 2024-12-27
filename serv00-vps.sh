@@ -12,22 +12,34 @@ colorize() {
         *)      echo "$text" ;;
     esac
 }
-# 自动获取脚本的路径
-SCRIPT_PATH=$(realpath "$0")
-
-# 设置每隔 8 小时执行一次
+# 设置每隔8小时执行一次
 CRON_JOB="0 */8 * * * $SCRIPT_PATH"  # 使用自动获取的脚本路径
 
-# 检查是否已存在该 cron 任务
-if crontab -l | grep -F "$CRON_JOB" > /dev/null; then
+# 获取当前所有的cron任务内容并按行分割成数组
+current_cron_tasks=$(crontab -l 2>/dev/null)
+IFS=$'\n' read -ra cron_lines <<< "$current_cron_tasks"
+
+# 标记是否任务已存在
+job_exists=false
+
+# 遍历每一行cron任务内容，检查是否已存在要添加的任务
+for line in "${cron_lines[@]}"; do
+    if [[ "$line" == "$CRON_JOB" ]]; then
+        job_exists=true
+        break
+    fi
+done
+
+# 根据任务是否存在进行相应处理
+if $job_exists; then
     echo -e "${GREEN}定时任务已存在，跳过添加${NC}"
 else
     (crontab -l; echo "$CRON_JOB") | crontab - 
     echo -e "${YELLOW}已添加定时任务，每8小时执行一次${NC}"
 fi
 
-# 显示当前的 cron 配置，仅显示当前脚本的定时任务
-echo -e "${YELLOW}当前的 cron 配置如下：${NC}"
+# 显示当前的cron配置，仅显示当前脚本的定时任务
+echo -e "${YELLOW}当前的cron配置如下：${NC}"
 crontab -l | grep "$SCRIPT_PATH"
 
 # 安装依赖包
